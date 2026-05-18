@@ -1,0 +1,94 @@
+name: Auto Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'module.prop'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Parse module.prop
+        id: meta
+        run: |
+          ID=$(grep '^id=' module.prop | cut -d= -f2)
+          VERSION=$(grep '^version=' module.prop | cut -d= -f2)
+          VCODE=$(grep '^versionCode=' module.prop | cut -d= -f2)
+          REPO=${{ github.repository }}
+          ZIPURL="https://github.com/$REPO/releases/download/$VERSION/$ID-$VERSION.zip"
+          RAW="https://raw.githubusercontent.com/$REPO/main"
+          echo "id=$ID"           >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "vcode=$VCODE"     >> $GITHUB_OUTPUT
+          echo "zipurl=$ZIPURL"   >> $GITHUB_OUTPUT
+          echo "raw=$RAW"         >> $GITHUB_OUTPUT
+          echo "Parsed: id=$ID version=$VERSION vcode=$VCODE"
+
+      - name: Check if release already exists
+        id: check
+        run: |
+          if gh release view "${{ steps.meta.outputs.version }}" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Release ${{ steps.meta.outputs.version }} already exists, skipping"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build module zip
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          ZIP=${{ steps.meta.outputs.id }}-${{ steps.meta.outputs.version }}.zip
+          zip -rq "$ZIP" . \
+            -x ".git/*" ".github/*" "*.zip" \
+               ".gitignore" "LICENSE" "CHANGELOG.md" "update.json" \
+               "README.md"
+          # README.md exclusion is debatable; many modules ship it. Re-include if exists:
+          [ -f README.md ] && zip -q "$ZIP" README.md
+          ls -lh "$ZIP"
+
+      - name: Update update.json
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          cat > update.json <<EOF
+          {
+              "version": "${{ steps.meta.outputs.version }}",
+              "versionCode": ${{ steps.meta.outputs.vcode }},
+              "zipUrl": "${{ steps.meta.outputs.zipurl }}",
+              "changelog": "${{ steps.meta.outputs.raw }}/CHANGELOG.md"
+          }
+          EOF
+
+      - name: Commit update.json
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          if git diff --quiet update.json; then
+            echo "update.json unchanged"
+          else
+            git config user.name  "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add update.json
+            git commit -m "chore: bump update.json to ${{ steps.meta.outputs.version }}"
+            git push
+          fi
+
+      - name: Create release
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          gh release create "${{ steps.meta.outputs.version }}" \
+            --title "${{ steps.meta.outputs.id }} ${{ steps.meta.outputs.version }}" \
+            --notes "Auto-released from module.prop change. See [CHANGELOG.md](CHANGELOG.md)." \
+            "${{ steps.meta.outputs.id }}-${{ steps.meta.outputs.version }}.zip"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
