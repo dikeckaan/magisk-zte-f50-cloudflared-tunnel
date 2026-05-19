@@ -1,6 +1,6 @@
 {
-    "version": "v1.2.1",
-    "versionCode": 4,
-    "zipUrl": "https://github.com/dikeckaan/magisk-zte-f50-cloudflared-tunnel/releases/download/v1.2.1/cloudflared-tunnel-v1.2.1.zip",
+    "version": "v1.2.2",
+    "versionCode": 5,
+    "zipUrl": "https://github.com/dikeckaan/magisk-zte-f50-cloudflared-tunnel/releases/download/v1.2.2/cloudflared-tunnel-v1.2.2.zip",
     "changelog": "https://raw.githubusercontent.com/dikeckaan/magisk-zte-f50-cloudflared-tunnel/main/CHANGELOG.md"
 }
