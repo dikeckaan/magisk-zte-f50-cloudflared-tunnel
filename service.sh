@@ -46,11 +46,36 @@ done
     # Give cloudflared time to start and register connections
     sleep 20
 
-    # Health check: verify metrics port is responding
+    # Health check helper. The original used `nc -w 2 ... PORT` but `nc`
+    # isn't shipped on stock Android and isn't in bin-utils, so the check
+    # always failed silently and unhealthy daemons were never killed.
+    # We pick the best available probe, in order:
+    #   1. bash's /dev/tcp (if bash is installed via bin-utils)
+    #   2. nc (if it ever shows up)
+    #   3. /proc/net/tcp (always present; checks LISTEN state)
+    PORT_HEX=$(printf '%04X' "$METRICS_PORT")
+    HEALTH_BASH=
+    for p in /system/bin/bash /data/adb/modules/bin-utils/system/bin/bash; do
+      [ -x "$p" ] && HEALTH_BASH="$p" && break
+    done
+    health_ok() {
+      if [ -n "$HEALTH_BASH" ]; then
+        "$HEALTH_BASH" -c "exec 3<>/dev/tcp/127.0.0.1/$METRICS_PORT" 2>/dev/null
+        return $?
+      fi
+      if command -v nc >/dev/null 2>&1; then
+        echo "" | nc -w 2 127.0.0.1 "$METRICS_PORT" >/dev/null 2>&1
+        return $?
+      fi
+      # Last-resort: kernel says port is LISTEN (0x0A). Doesn't verify
+      # the daemon answers, but if cloudflared crashed the socket is gone.
+      grep -qE ":${PORT_HEX} 00000000:0000 0A " /proc/net/tcp 2>/dev/null
+    }
+
     fail_count=0
     while kill -0 "$CF_PID" 2>/dev/null; do
       sleep 15
-      if echo "" | nc -w 2 127.0.0.1 "$METRICS_PORT" >/dev/null 2>&1; then
+      if health_ok; then
         fail_count=0
       else
         fail_count=$((fail_count + 1))
