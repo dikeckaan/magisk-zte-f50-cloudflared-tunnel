@@ -1,7 +1,7 @@
 id=cloudflared-tunnel
 name=Cloudflare Tunnel
-version=v1.2.1
-versionCode=4
+version=v1.2.2
+versionCode=5
 author=kaandikec
-description=Cloudflare Tunnel (cloudflared) daemon with supervisor, health check + token from /data/cloudflared/token
+description=Cloudflare Tunnel (cloudflared) daemon with supervisor + health check (toybox-compatible) + token from /data/cloudflared/token. Requires bin-utils v1.3.0+.
 updateJson=https://raw.githubusercontent.com/dikeckaan/magisk-zte-f50-cloudflared-tunnel/main/update.json
